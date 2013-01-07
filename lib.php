@@ -17,6 +17,7 @@
 
 /**
  * This plugin is used to access botr videos
+ * requirement: installed moodle_filter_botr and setup.
  *
  * @since 2.0
  * @package    repository
@@ -91,9 +92,9 @@ class repository_botr extends repository {
 
         $this->keyword = $search_text;
         $ret  = array();
-        $ret['nologin'] = false;
-//      $ret['manage'] = 'http://dashboard.bitsontherun.com/videos/';
-        $ret['help'] = "https://github.com/actXc/moodle_filter_cdn/blob/master/README.md";
+        $ret['nologin'] = true;
+//        $ret['help'] = get_string('helpURL','repository_botr');
+//       $ret['manage'] = get_string('manageURL','repository_botr');
         $ret['page'] = (int)$page;
         if ($ret['page'] < 1) {
             $ret['page'] = 1;
@@ -129,8 +130,8 @@ class repository_botr extends repository {
      */
     private function _get_collection($keyword, $start, $max, $sort) {
         global $CFG;
-//		$botr_api = new BotrAPI($api_key,$api_secret);
-//        $botr_api = new BotrAPI( get_config('repository_botr','botr_key'), get_config('repository_botr','botr_secret'));
+        // get connected to the botr-PLatfrom via  botr_api
+        // the credentials can be entered in the moodle_filter_botr plugin
         $botr_api = new BotrAPI($CFG->botr_key,$CFG->botr_secret);
 
 		$list = array();
@@ -152,6 +153,7 @@ class repository_botr extends repository {
         }
  		// get all videos that fits $params search
 		$response = $botr_api->call("/videos/list",$params);
+//        print_object($response);
         if ($response['status']== "error") {
         die(json_encode(array('e'=>get_string('botrApiProblem', 'repository_botr').$response['message'])));
         }
@@ -161,7 +163,11 @@ class repository_botr extends repository {
 			# calculate the duration in format
 			$Sekundenzahl = round($video['duration']);
 			$duration = sprintf("%02d:%02d:%02d",($Sekundenzahl/60/60)%24,($Sekundenzahl/60)%60,$Sekundenzahl%60);
-			
+
+            // check for player option and add a '-' if the player is given
+            $player = repository::get_option('player');
+            if (!empty($player)){ $player = "-".$player;}
+//print_object($player);
 			$list[] = array( // get all video data from the api into the file picker list
                 'shorttitle'=>$video['title'],
                 'thumbnail_title'=>$video['description']."\n ⌛   ".$duration."\n ▷  ".$video['views'],
@@ -172,9 +178,8 @@ class repository_botr extends repository {
                 'size'=>$video['size'],
                 'date'=>$video['date'],
 				'tags'=>$video['tags'],
-                'source'=>"[botr ".$video['key']."]",
+                'source'=>"[botr ".$video['key'].$player."]",
 				'url' => $video['key'],
-//              '
 				'author'=>$video['author']
             );
         }
@@ -237,22 +242,6 @@ class repository_botr extends repository {
         return $ret;
     }
 	
-	    /**
-     * Prepare file reference information
-     *
-     * @param string $source
-     * @return string file referece
-     */
- /*   public function get_file_reference($source) {
-        return $source;
-    }
-*/
-	
-	/**
-	* prepare the signed link to the video
-	*
-	**/
-//	get_link($url)
 
     /**
      * file types supported by botr plugin
@@ -271,49 +260,30 @@ class repository_botr extends repository {
     }
 
 	public static function get_type_option_names() {
-		return array('botr_key', 'botr_secret', 'pluginname');
-	}/**/
+        return array('pluginname');
+    }
 
-/*    public static function get_type_option_names() {
-        return array_merge(parent::get_type_option_names(), array(
-                'botr_key',
-                'botr_secret'
-            )
-        );
-    }*/
-
-	public static function type_config_form($mform) {
+/*	public static function type_config_form($mform) {
 		parent::type_config_form($mform);
-	 
-		$botr_key = get_config('repository_botr', 'botr_key');
-		$mform->addElement('text', 'botr_key', get_string('botr_key', 'repository_botr'));
-		$mform->setDefault('botr_key', $botr_key);
-		
-		$botr_secret = get_config('repository_botr', 'botr_secret');
-		$mform->addElement('text', 'botr_secret', get_string('botr_secret', 'repository_botr'));
-		$mform->setDefault('botr_secret', $botr_secret);
-	 	$mform->addHelpButton('botr_secret','botr_secret','repository_botr');
-	 	$mform->addHelpButton('botr_key','botr_key','repository_botr');
+        $mform->addHelpButton('pluginname','pluginname','repository_botr'); // not necessary
+    }/**/
 
-	}/**/
-	
-/*	public static function type_form_validation($mform, $data, $errors) {
-		if (!isset($data['botr_key'])) {
-			$errors['botr_key'] = get_string('invalidAPI-Key', 'repository_botr');
-		}
-		if (!isset($data['botr_secret'])) {
-			$errors['botr_secret'] = get_string('invalidAPI-Secret', 'repository_botr');
-		}
-		return $errors;
-	}/**/
-	
+
 	public static function get_instance_option_names() {
-		return array('owner'); // From repository_filesystem
+		return array('owner','player'); // From repository_filesystem
 	}
 	
 	public static function instance_config_form($mform) {
         $mform->addElement('text', 'owner', get_string('owner', 'repository_botr'));
-        $mform->addRule('owner', get_string('required'), 'required', null, 'client');
+        $mform->addElement('text', 'player', get_string('player', 'repository_botr'), array('size' => '8'));
+
+        // here we should test for real tags
+//        $mform->addRule('owner', get_string('callback'), 'callback', an api call to botr_api, 'client');
+
+        $mform->addRule('player', get_string('playerrule','repository_botr'), 'nopunctuation', null, 'client');
+        $mform->addHelpButton('owner','owner','repository_botr');
+        $mform->addHelpButton('player','player','repository_botr');
+        $mform->addHelpButton('name','defaultname','repository_botr');
     }/**/
 	
 	
@@ -321,7 +291,11 @@ class repository_botr extends repository {
         //here we create a default repository instance. The last parameter is 1 in order to set the instance as readonly.
         /** @noinspection PhpDeprecationInspection */
         $id = repository::static_function('botr','create', 'botr', 0, get_system_context(),
-                                    array('name' => 'default instance','owner' => null),1);
+                                    array('name' => get_string('defaultname','repository_botr'),
+                                          'owner' => null,
+                                          'player' => null,
+                                    ),
+              1);
 
         if (empty($id)) {
             return false;
