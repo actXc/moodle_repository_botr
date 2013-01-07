@@ -25,18 +25,21 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later except the botr-API
  */
 
-$string['pluginname'] = 'botr videos';
-$string['search'] = 'Search videos';
-$string['botr:view'] = 'Use botr in file picker';
-$string['configplugin'] = 'botr repository type configuration';
+$string['pluginname'] = 'BitsOnTheRun Video';
 $string['pluginname_help'] = 'Embedding BitsOnTheRun-Videos easily into your moodle-documents and posts';
+$string['search'] = 'Search videos';
+$string['botr:view'] = 'Use Bits On The Run videos in file picker';
+$string['configplugin'] = 'botr repository type configuration';
 $string['sortby'] = 'Sort By';
 $string['sortdate'] = 'Date Published';
 $string['sortauthor'] = 'Author';
 $string['sorttitle'] = 'Title';
 $string['sortviews'] = 'View Count';
-$string['API-Key'] = 'API-Key von Botr';
-$string['API-Secret'] = 'API-Secret von Botr';
+$string['botr_key'] = ' API-Key';
+$string['botr_key_help'] = 'get your Bits on the Run Video account key here <a href="http://dashboard.bitsontherun.com/settings/properties/api-keys/">Support page</a>';
+$string['botr_secret'] = 'API-Secret';
+$string['botr_secret_help'] = 'get your Bits on the Run Video account secret here <a href="http://dashboard.bitsontherun.com/settings/properties/api-keys/">Support page</a>';
 $string['invalidAPI-Key'] = 'API-Key ist not defined correctly';
 $string['invalidAPI-Secret'] = 'API-Secret ist not defined correctly';
-$string['Owner'] = 'Owner of the video';
+$string['botrApiProblem'] = 'Check API-Secret and API-Key, API ist not working correctly';
+$string['owner'] = 'Owner of the video';

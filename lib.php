@@ -44,7 +44,7 @@ require_once($CFG->dirroot . '/repository/botr/botrapi/api.php');
 class repository_botr extends repository {
     /** @var int maximum number of thumbs per page */
 
-    const BOTR_THUMBS_PER_PAGE = 8;
+    const BOTR_THUMBS_PER_PAGE =20;
     /**
      * botr plugin constructor
      * @param int $repositoryid
@@ -52,8 +52,8 @@ class repository_botr extends repository {
      * @param array $options
      */
     public function __construct($repositoryid, $context = SYSCONTEXTID, $options = array()) {
-        // options['mimetypes'] =>'*';
-		parent::__construct($repositoryid, $context, $options);
+        // options['mimetypes'] =>'video';
+        parent::__construct($repositoryid, $context, $options);
     }
 
     public function check_login() {
@@ -63,6 +63,7 @@ class repository_botr extends repository {
     /**
      * Return search results
      * @param string $search_text
+     * @param int $page
      * @return array
      */
     public function search($search_text, $page = 0) {
@@ -90,7 +91,9 @@ class repository_botr extends repository {
 
         $this->keyword = $search_text;
         $ret  = array();
-        $ret['nologin'] = true;
+        $ret['nologin'] = false;
+//      $ret['manage'] = 'http://dashboard.bitsontherun.com/videos/';
+        $ret['help'] = "https://github.com/actXc/moodle_filter_cdn/blob/master/README.md";
         $ret['page'] = (int)$page;
         if ($ret['page'] < 1) {
             $ret['page'] = 1;
@@ -103,7 +106,15 @@ class repository_botr extends repository {
         $ret['norefresh'] = false;
         $ret['nosearch'] = false;
 		$ret['dynloading'] = true;
-        $ret['pages'] = -1;
+//        $ret['object'] = array('type'=>'txt/html','url'=>'http://lern-net.de/agb/botr/');
+        if (!empty($ret['list'])) {
+            $ret['pages'] = -1; // means we don't know exactly how many pages there are but we can always jump to the next page
+        } else if ($ret['page'] > 1) {
+            $ret['pages'] = $ret['page']; // no images available on this page, this is the last page
+        } else {
+            $ret['pages'] = 0; // no paging
+        }
+//		$ret['upload'] = array ('label'=>'uptitle','id'=>'uptitleid');
  		
         return $ret;
     }
@@ -117,45 +128,53 @@ class repository_botr extends repository {
      * @return array
      */
     private function _get_collection($keyword, $start, $max, $sort) {
+        global $CFG;
 //		$botr_api = new BotrAPI($api_key,$api_secret);
-    	$botr_api = new BotrAPI('xxxxxxxx', 'xxxxxxxxxxxxxxxxxxxxxxxxx');
-		
- 
+//        $botr_api = new BotrAPI( get_config('repository_botr','botr_key'), get_config('repository_botr','botr_secret'));
+        $botr_api = new BotrAPI($CFG->botr_key,$CFG->botr_secret);
+
 		$list = array();
 		$response = array();
-		$params = array(
-			'result_limit'=>intval($max),
-			'result_offset'=>intval($start)-1,
-/*			'tags_mode'=>'all',
-			'tags'=>$keyword,
-*/			'text'=>$keyword,
-			'order_by'=>$sort,
-			'search'=>'*'
-		);
- 		
-		$response = $botr_api->call("/videos/list",$params);
 
-		if ($response['status'] == "error") { die(print_r("BOTR API Fehler".$response)); }
-        
-		for($i=0; $i<sizeof($response['videos']); $i++) {
+        // prepare the parameter for the botr api search
+        $params = array(
+			'result_limit'=>intval($max),
+			'result_offset'=>intval($start)-1,   //botr api counts from zero
+			'tags_mode'=>'all',   // all the owner tags must be in the list
+			'tags'=>repository::get_option('owner'), // with the owner tags, you could select by tags and give a owner a tag
+			'order_by'=>$sort
+		);
+
+        // if a search term is specified add this to the search:
+        if (!empty($keyword)) {
+                $params['text'] = $keyword;
+                $params['search'] = '*'; // here could be something more efficient See http://developer.longtailvideo.com/botr/system-api/methods/videos/list.html
+        }
+ 		// get all videos that fits $params search
+		$response = $botr_api->call("/videos/list",$params);
+        if ($response['status']== "error") {
+        die(json_encode(array('e'=>get_string('botrApiProblem', 'repository_botr').$response['message'])));
+        }
+		for($i=0; $i<sizeof($response['videos']); $i++) {  // walk though all found videos
 			$video = $response['videos'][$i];
 			
 			# calculate the duration in format
 			$Sekundenzahl = round($video['duration']);
 			$duration = sprintf("%02d:%02d:%02d",($Sekundenzahl/60/60)%24,($Sekundenzahl/60)%60,$Sekundenzahl%60);
 			
-			$list[] = array(
+			$list[] = array( // get all video data from the api into the file picker list
                 'shorttitle'=>$video['title'],
-                'thumbnail_title'=>$video['description']." ".$duration." Views:".$video['views'],
-                'title'=>$video['title']."              .mp4", 
-                'thumbnail'=>"http://cdn.actxc.de/thumbs/".$video['key']."-120.jpg",
-                'thumbnail_width'=>120,
-                'thumbnail_height'=>90,
+                'thumbnail_title'=>$video['description']."\n ⌛   ".$duration."\n ▷  ".$video['views'],
+                'title'=>$video['title']." \t \t \t \t \t \t \t \t \t .mp4", // hack to get it through the filepicker: we pretend to be a video mime type
+                'thumbnail'=>"http://$CFG->botr_dnsmask/thumbs/".$video['key']."-120.jpg",  // thumbs are prepared at botr platform
+                'thumbnail_width'=>110, // try to fit 5 in a row
+                'thumbnail_height'=>"50px", //
                 'size'=>$video['size'],
                 'date'=>$video['date'],
 				'tags'=>$video['tags'],
-                'source'=>"[cdn ".$video['key']."]",
+                'source'=>"[botr ".$video['key']."]",
 				'url' => $video['key'],
+//              '
 				'author'=>$video['author']
             );
         }
@@ -224,10 +243,10 @@ class repository_botr extends repository {
      * @param string $source
      * @return string file referece
      */
-    public function get_file_reference($source) {
+ /*   public function get_file_reference($source) {
         return $source;
     }
-
+*/
 	
 	/**
 	* prepare the signed link to the video
@@ -247,57 +266,69 @@ class repository_botr extends repository {
      * botr plugin only return external links
      * @return int
      */
- 
-	public function supported_returntypes() {
+ 	public function supported_returntypes() {
         return FILE_EXTERNAL;
     }
-	
+
 	public static function get_type_option_names() {
-		return array_merge(parent::get_type_option_names(), array(
-			   'API_Key',
-			   'API_Secret'
-			   )
-			);
-	}
+		return array('botr_key', 'botr_secret', 'pluginname');
+	}/**/
+
+/*    public static function get_type_option_names() {
+        return array_merge(parent::get_type_option_names(), array(
+                'botr_key',
+                'botr_secret'
+            )
+        );
+    }*/
 
 	public static function type_config_form($mform) {
 		parent::type_config_form($mform);
 	 
-		$API_Key = get_config('repository_botr', 'API_Key');
-		$mform->addElement('text', 'API_Key', get_string('API-Key', 'repository_botr'), array('size' => '40'));
-		$mform->setDefault('API_Key', $API_Key);
+		$botr_key = get_config('repository_botr', 'botr_key');
+		$mform->addElement('text', 'botr_key', get_string('botr_key', 'repository_botr'));
+		$mform->setDefault('botr_key', $botr_key);
 		
-		$API_Secret = get_config('repository_botr', 'API_Secret');
-		$mform->addElement('text', 'API_Secret', get_string('API-Secret', 'repository_botr'), array('size' => '40'));
-		$mform->setDefault('API_Secret', $API_Secret);
-		
-		
+		$botr_secret = get_config('repository_botr', 'botr_secret');
+		$mform->addElement('text', 'botr_secret', get_string('botr_secret', 'repository_botr'));
+		$mform->setDefault('botr_secret', $botr_secret);
+	 	$mform->addHelpButton('botr_secret','botr_secret','repository_botr');
+	 	$mform->addHelpButton('botr_key','botr_key','repository_botr');
+
 	}/**/
 	
-	public static function type_form_validation($mform, $data, $errors) {
-		if (!isset($data['API-Key'])) {
-			$errors['API-Key'] = get_string('invalidAPI-Key', 'repository_botr');
+/*	public static function type_form_validation($mform, $data, $errors) {
+		if (!isset($data['botr_key'])) {
+			$errors['botr_key'] = get_string('invalidAPI-Key', 'repository_botr');
 		}
-		if (!isset($data['API-Secret'])) {
-			$errors['API-Secret'] = get_string('invalidAPI-Secret', 'repository_botr');
+		if (!isset($data['botr_secret'])) {
+			$errors['botr_secret'] = get_string('invalidAPI-Secret', 'repository_botr');
 		}
 		return $errors;
-	}
+	}/**/
 	
 	public static function get_instance_option_names() {
-		return array('Owner'); // From repository_filesystem
+		return array('owner'); // From repository_filesystem
 	}
 	
-	public static function instance_config_form(&$mform) {
-        $mform->addElement('text', 'Owner', get_string('Owner', 'repository_botr_public'));
-        $mform->addRule('Owner', get_string('required'), 'required', null, 'client');
+	public static function instance_config_form($mform) {
+        $mform->addElement('text', 'owner', get_string('owner', 'repository_botr'));
+        $mform->addRule('owner', get_string('required'), 'required', null, 'client');
     }/**/
 	
 	
 	public static function plugin_init() {
         //here we create a default repository instance. The last parameter is 1 in order to set the instance as readonly.
-        repository_static_function('botr','create', 'botr', 0, get_system_context(), 
-                                    array('name' => 'default instance','Owner' => null),1);
-     }
-	
+        /** @noinspection PhpDeprecationInspection */
+        $id = repository::static_function('botr','create', 'botr', 0, get_system_context(),
+                                    array('name' => 'default instance','owner' => null),1);
+
+        if (empty($id)) {
+            return false;
+        } else {
+            return true;
+        }
+
+    }
+
 }
