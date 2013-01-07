@@ -2,7 +2,7 @@ moodle_repository_botr
 ======================
 repository for adding tags of BitsOnTheRun videos.
 
-## Requirements:
+## Requirements to see BotR videos in moodle:
 
 * account at bitsontherun.com ( small accounts are free (true on 2013/Jan/06)
 * filter installed
@@ -23,9 +23,9 @@ After the filter has added a player and created a secret timeout-hash you can ca
 beta test state,Do not use for productiv sites, do not expect anything
 
 ## todo: (Backlog) 
-
+* upload from inside of moodle (with owner-tag)
 * get the real tags for search (big)
-* find a way to control the capabilities, teachers can edit and delet all public repos (big)
+* find a way to control the capabilities, teachers can edit and delete all public repos (big)
 * preview url in filepicker select window (the last window) (big)
 * better meta data display in filepicker, more data, better useabillity=click where? (big)
 * make install video (medium)
