@@ -45,7 +45,7 @@ require_once($CFG->dirroot . '/repository/botr/botrapi/api.php');
 class repository_botr extends repository {
     /** @var int maximum number of thumbs per page */
 
-    const BOTR_THUMBS_PER_PAGE =20;
+    const BOTR_THUMBS_PER_PAGE = 20;
     /**
      * botr plugin constructor
      * @param int $repositoryid
@@ -137,56 +137,76 @@ class repository_botr extends repository {
 		$list = array();
 		$response = array();
 
-        // prepare the parameter for the botr api search
+        // We get all videos for the specified owner
         $params = array(
-			'result_limit'=>intval($max),
-			'result_offset'=>intval($start)-1,   //botr api counts from zero
-			'tags_mode'=>'all',   // all the owner tags must be in the list
-			'tags'=>repository::get_option('owner'), // with the owner tags, you could select by tags and give a owner a tag
+			'result_limit'=>(int)$max,
+			'result_offset'=> (int)($start-1),   //botr api counts from zero
+//  			'tags_mode'=>'any',   // all the owner tags must be in the list
+//  			'tags'=>$keyword, // with the owner tags, you could select by tags and give a owner a tag
+            'search:custom.owner' => repository::get_option('owner') , //not here, because we get all  and do not search
 			'order_by'=>$sort
 		);
 
-        // if a search term is specified add this to the search:
-        if (!empty($keyword)) {
+        // if a search term is specified select those from the search:
+ /*       if (!empty($keyword)) {
                 $params['text'] = $keyword;
                 $params['search'] = '*'; // here could be something more efficient See http://developer.longtailvideo.com/botr/system-api/methods/videos/list.html
         }
+ */
  		// get all videos that fits $params search
 		$response = $botr_api->call("/videos/list",$params);
-//        print_object($response);
-        if ($response['status']== "error") {
-        die(json_encode(array('e'=>get_string('botrApiProblem', 'repository_botr').$response['message'])));
+        if ($response['status'] == "error") {
+            die(json_encode(array('e'=>get_string('botrApiProblem', 'repository_botr').$response['message'])));
         }
-		for($i=0; $i<sizeof($response['videos']); $i++) {  // walk though all found videos
-			$video = $response['videos'][$i];
-			
-			# calculate the duration in format
-			$Sekundenzahl = round($video['duration']);
-			$duration = sprintf("%02d:%02d:%02d",($Sekundenzahl/60/60)%24,($Sekundenzahl/60)%60,$Sekundenzahl%60);
 
-            // check for player option and add a '-' if the player is given
-            $player = repository::get_option('player');
-            if (!empty($player)){ $player = "-".$player;}
-//print_object($player);
-			$list[] = array( // get all video data from the api into the file picker list
-                'shorttitle'=>$video['title'],
-                'thumbnail_title'=>$video['description']."\n ⌛   ".$duration."\n ▷  ".$video['views'],
-                'title'=>$video['title']." \t \t \t \t \t \t \t \t \t .mp4", // hack to get it through the filepicker: we pretend to be a video mime type
-                'thumbnail'=>"http://$CFG->botr_dnsmask/thumbs/".$video['key']."-120.jpg",  // thumbs are prepared at botr platform
-                'thumbnail_width'=>110, // try to fit 5 in a row
-                'thumbnail_height'=>"50px", //
-                'size'=>$video['size'],
-                'date'=>$video['date'],
-				'tags'=>$video['tags'],
-                'source'=>"[botr ".$video['key'].$player."]",
-				'url' => $video['key'],
-				'author'=>$video['author']
-            );
-        }
+        for ($i = 0; $i < sizeof($response['videos']); $i++) { // walk though all found videos
+
+            $video = $response['videos'][$i];
+ /*           if (!empty($keyword)) {
+                if (!(stripos(json_encode($video),$keyword) === false)) { $keyword = '';}
+            }
+*/
+//            if (in_array($keyword,$video,true)) {
+            $pos = false;
+            if ( !empty($keyword)) {
+                $alltext = $video['title']." ".$video['description']." ".$video['author']." ".$video['key']." ".$video['tags'];
+                $pos = stripos($alltext,$keyword);
+            }
+            if ((empty($keyword)) or !($pos === false)) {
+//                if (isset($video['custom']['owner'])) {
+//                    if ($video['custom']['owner'] === repository::get_option('owner')) {
+                        # calculate the duration in format
+                        $Sekundenzahl = round($video['duration']);
+                        $duration = sprintf("%02d:%02d:%02d", ($Sekundenzahl / 60 / 60) % 24, ($Sekundenzahl / 60) % 60, $Sekundenzahl % 60);
+
+                        // check for player option and add a '-' if the player is given
+                        $player = repository::get_option('player');
+                        if (!empty($player)) {
+                            $player = "-" . $player;
+                        }
+    //print_object($player);
+                        $list[] = array( // get all video data from the api into the file picker list
+                            'shorttitle' => $video['title'],
+                            'thumbnail_title' => $video['description'] . "\n ⌛   " . $duration . "\n ▷  " . $video['views'],
+                            'title' => $video['title'] . "   .mp4", // hack to get it through the filepicker: we pretend to be a video mime type
+                            'thumbnail' => "http://$CFG->botr_dnsmask/thumbs/" . $video['key'] . "-120.jpg", // thumbs are prepared at botr platform
+                            'thumbnail_width' => 110, // try to fit 5 in a row
+                            'thumbnail_height' => "50px", //
+                            'size' => $video['size'],
+                            'date' => $video['date'],
+                            'tags' => $video['tags'],
+                            'source' => "[botr " . $video['key'] . $player . "]",
+                            'url' => $video['key'],
+                            'author' => $video['author']
+                        );
+  //               }
+               }
+            }
+
 		
 
         return $list;
-    }
+   }
 
     /**
      * botr plugin doesn't support global search
